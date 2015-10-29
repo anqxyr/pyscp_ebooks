@@ -1,0 +1,1 @@
+from pyscp_ebooks import epub
