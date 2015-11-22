@@ -7,7 +7,8 @@
 ###############################################################################
 
 import logging
-import pyscp_ebooks.epub
+
+from . import epub, parser, utils
 
 
 ###############################################################################
@@ -17,7 +18,7 @@ log = logging.getLogger(__name__)
 ###############################################################################
 
 
-class Builder:
+class Book:
 
     """
     Build epub files from wikidot sites.
@@ -29,9 +30,11 @@ class Builder:
 
     def __init__(self, wiki, heap, **kwargs):
         self.wiki = wiki
-        self.heap = set(heap)
-        self.book = pyscp_ebooks.epub.Book(**kwargs)
+        self.heap = {p.url for p in heap}
+        self.book = epub.Book(**kwargs)
         self.urls = {}
+        self.pb = utils.PBar(
+            '{:40.40}'.format(self.book.title.upper()), len(self.heap) * 3)
 
     def add_page(self, title, content, parent=None):
         return self.book.add_page(title, content, parent)
@@ -47,6 +50,7 @@ class Builder:
         """
         if url not in self.heap:
             return
+        self.pb.update()
         self.heap.remove(url)
         page = self.book.add_page(url, '-', parent)
         self.urls[url] = page.uid
@@ -56,8 +60,8 @@ class Builder:
         """
         Find and replace placeholders in the page tree.
 
-        Recursively iterate over the pages of the book, overwrite placeholder
-        pages and update title information.
+        Recursively iterates over the pages of the book, overwrites placeholder
+        pages and updates title information.
         """
         parent.children[:] = [self._overwrite(i) for i in parent.children]
         for i in parent.children:
@@ -67,8 +71,9 @@ class Builder:
         """Overwrite the placeholder page with parsed data."""
         if item.title not in self.urls:
             return item
+        self.pb.update()
         page = self.wiki(item.title)
-        content = page.html  # add parsing later
+        content = parser.parse(page, self.urls)
         self.book._write_page(item.uid, page.title, content)
         return item._replace(title=page.title)
 
@@ -77,7 +82,7 @@ class Builder:
         return self.add_page(
             title, '<div class="title2">{}</div>'.format(title), parent)
 
-    def new_section(self, title, urls, parent=None):
+    def new_section(self, title, urls=None, parent=None):
         """
         Add a new section.
 
@@ -86,11 +91,12 @@ class Builder:
 
         If none of the urls are in the heap, the header will not be added.
         """
-        if not set(urls) & self.heap:
+        if urls is not None and not set(urls) & self.heap:
             return
         header = self._add_section_header(title, parent)
-        for url in urls:
-            self.add_url(url, header)
+        if urls:
+            for url in urls:
+                self.add_url(url, header)
         return header
 
     def add_credits(self):
@@ -101,11 +107,14 @@ class Builder:
         to the book, and add them as a separate section.
         """
         log.info('Constructing credits.')
+        self.pb.max_value = len(self.urls) * 3
         credits = self._add_section_header('Acknowledgments and Attributions')
         subsections = []
-        for page in pyscp_ebooks.epub.flatten(self.book.root):
+        for page in epub.flatten(self.book.root):
             if page.title not in self.urls and page.children:
                 subsections.append([page.title, ''])  # new major section
+            if page.title not in self.urls:
+                continue
             subsections[-1][1] += self._get_page_credits(page.title)
         subsections = ((t, c) for t, c in subsections if c)
         for title, content in subsections:
@@ -116,19 +125,19 @@ class Builder:
     def _get_page_credits(self, url):
         """Generate attribution text for the given url."""
         # this method is messy, but I can't think of a way to improve it atm.
-        if url not in self.urls:
-            return ''
+        self.pb.update()
         page = self.wiki(url)
         if not page.author:
             return ''
         source = (
-            '<b><a href="{}.xhtml">{}</a></b> ({}) was written by <b>{}</b>.'
+            '<b><a href="{}.xhtml">{}</a></b> ({}) was written by <b>{}</b>'
             .format(self.urls[url], page.title, page.url, page.author))
         if page.rewrite_author:
-            source += ', rewritten by <b>{}</b>.'.format(page.rewrite_author)
-        return '<p>{}</p>'.format(source)
+            source += ', rewritten by <b>{}</b>'.format(page.rewrite_author)
+        return '<p>{}.</p>'.format(source)
 
     def save(self, filename):
         for page in self.book.root:
             self._replace_placeholders(page)
         self.book.save(filename)
+        self.pb.finish()
