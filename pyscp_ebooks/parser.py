@@ -32,7 +32,9 @@ def parse(page, pages):
         _quote(elem)
     for elem in soup('a'):
         _link(elem, page._wiki.site, pages)
-    return str(soup)
+    for elem in soup('img'):
+        _image(elem)
+    return str(_title(page, soup))
 
 
 def _tab(elem):
@@ -92,5 +94,12 @@ def _quote(elem):
     elem.attrs = {'class': 'quote'}
 
 
+def _image(elem):
+    elem.decompose()
+
+
 def _title(page, soup):
-    pass
+    title = bs().new_tag('p', **{'class': 'title'})
+    title.string = page.title
+    soup.insert(0, title)
+    return soup
