@@ -27,12 +27,10 @@ class Parser(parser.Parser):
         if elem['src'] in self.images:
             elem['src'] = '../images/{}_{}'.format(
                 *elem['src'].split('/')[-2:])
-            return
-        for parent in elem.parents:
-            if 'scp-image-block' in parent.attrs.get('class', ''):
-                parent.decompose()
-                return
-        elem.decompose()
+        elif 'scp-image-block' in elem.parent.attrs.get('class', ''):
+            elem.parent.decompose()
+        else:
+            elem.decompose()
 
     def _title(self, soup, page):
         super()._title(soup, page)
@@ -63,19 +61,22 @@ class Book(builder.Book):
         self.book.set_stylesheet(pkgutil.get_data(
             'pyscp_ebooks',
             'resources/scp_wiki/stylesheet.css').decode('UTF-8'))
+        self.whitelisted_images = {
+            i.url: i for i in self.wiki.list_images()
+            if i.status in ('BY-SA CC', 'PUBLIC DOMAIN')}
+        self.used_images = []
 
     def _get_content(self, page):
         if not hasattr(self, '_parser'):
-            images = [
-                i.url for i in self.wiki.list_images()
-                if i.status in ('BY-SA CC', 'PUBLIC DOMAIN')]
-            self._parser = Parser(self.urls, images)
+            self._parser = Parser(self.urls, self.whitelisted_images.keys())
         return self._parser.parse(page)
 
     ###########################################################################
 
     def add_url(self, url, parent=None):
         page = super().add_url(url, parent)
+        self.used_images.extend(
+            i for i in self.wiki(url).images if i in self.whitelisted_images)
         for i in self._get_children(url):
             self.add_url(i, page)
         return page
@@ -179,6 +180,15 @@ class Book(builder.Book):
             self.new_section(
                 'Tales {}'.format(k.upper()), sorted(list(v)), section)
 
+    ###########################################################################
+
+    def save(self, filename):
+        for i in self.used_images:
+            self.book.add_image(
+                '{}_{}'.format(*i.split('/')[-2:]),
+                self.whitelisted_images[i].data)
+        super().save(filename)
+
 ###############################################################################
 
 
@@ -220,7 +230,7 @@ def build_digest(wiki, output_path):
         title='SCP Foundation Monthly Digest: ' + long_date)
     book.add_intro()
     book.add_skips(misc=True)
-    book.add_hubs()
+    # hubs are intentionally not included
     book.add_tales()
     book.add_credits()
     book.save(output_path + book.book.title.replace(':', '') + '.epub')
