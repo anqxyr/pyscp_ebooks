@@ -10,9 +10,34 @@ import functools
 import pkgutil
 import re
 
-from . import builder
+from . import builder, parser
 
 ###############################################################################
+
+
+class Parser(parser.Parser):
+
+    def __init__(self, pages, images):
+        super().__init__(pages)
+        self.images = images
+
+    def _image(self, elem):
+        if elem.name is None or 'src' not in elem.attrs:
+            return
+        if elem['src'] in self.images:
+            elem['src'] = '../images/{}_{}'.format(
+                *elem['src'].split('/')[-2:])
+            return
+        for parent in elem.parents:
+            if 'scp-image-block' in parent.attrs.get('class', ''):
+                parent.decompose()
+                return
+        elem.decompose()
+
+    def _title(self, soup, page):
+        super()._title(soup, page)
+        class_name = 'scp-title' if 'scp' in page.tags else 'tale-title'
+        soup.find(class_='title').attrs = {'class': class_name}
 
 
 class Book(builder.Book):
@@ -32,12 +57,20 @@ class Book(builder.Book):
     """
 
     def __init__(self, wiki, heap, cover, **kwargs):
-        super().__init__(wiki, heap, **kwargs)
+        super().__init__(wiki, heap, author='Various Authors', **kwargs)
         self.book.set_cover(pkgutil.get_data(
             'pyscp_ebooks', 'resources/scp_wiki/' + cover))
         self.book.set_stylesheet(pkgutil.get_data(
             'pyscp_ebooks',
             'resources/scp_wiki/stylesheet.css').decode('UTF-8'))
+
+    def _get_content(self, page):
+        if not hasattr(self, '_parser'):
+            images = [
+                i.url for i in self.wiki.list_images()
+                if i.status in ('BY-SA CC', 'PUBLIC DOMAIN')]
+            self._parser = Parser(self.urls, images)
+        return self._parser.parse(page)
 
     ###########################################################################
 
