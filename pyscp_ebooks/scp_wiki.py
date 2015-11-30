@@ -117,6 +117,22 @@ class Book(builder.Book):
 
     ###########################################################################
 
+    def add_credits(self):
+        credits = super().add_credits()
+        source = []
+        template = ('<p>The image {} is licensed under {} '
+                    'and available at <u>{}</u>.</p>')
+        for url in self.used_images:
+            name = '{}_{}'.format(*url.split('/')[-2:])
+            image = self.whitelisted_images[url]
+            source.append(template.format(name, image.status, image.source))
+        self.add_page(
+            'Images',
+            '<div class="attrib">{}</div>'.format('\n'.join(source)),
+            credits)
+
+    ###########################################################################
+
     @functools.lru_cache()
     def _tags(self, *tags):
         """Return a set of urls with matching tags."""
@@ -132,7 +148,9 @@ class Book(builder.Book):
             'resources/scp_wiki/{}.xhtml'.format(x)).decode('UTF-8')
         self.add_page('Cover Page', page('cover'))
         self.add_page('Introduction', page('intro'))
-        self.add_page('License', page('license'))
+        license = page('license')
+        license.find(class_='footer').string = arrow.now().format('YYYY-MM-DD')
+        self.add_page('License', license.div.prettify())
         self.add_page('Title Page', page('title'))
 
     def _add_skip_block(self, block_number, parent=None):
@@ -194,20 +212,20 @@ class Book(builder.Book):
 
 def build_complete(wiki, output_path):
     book = Book(
-        wiki, wiki.list_pages(rating='>0'), 'complete.png',
+        wiki, wiki.list_pages(rating='>0'), 'scp_cover_1.png',
         title='SCP Foundation: The Complete Collection')
     book.add_intro()
     book.add_skips(misc=True)
     book.add_hubs()
     book.add_tales()
     book.add_credits()
-    book.save(output_path + book.book.title.replace(':', '') + '.epub')
+    book.save(output_path + book.book.title.replace(':', ' -') + '.epub')
 
 
 def build_tomes(wiki, output_path):
     heap = list(wiki.list_pages(rating='>0'))
     for tome in range(12):
-        book = Book(wiki, heap, 'complete.png',
+        book = Book(wiki, heap, 'scp_cover_2.png',
                     title='SCP Foundation: Tome {}'.format(tome + 1))
         book.add_intro()
         if tome < 6:
@@ -217,20 +235,21 @@ def build_tomes(wiki, output_path):
         else:
             book.add_tales(*('0D', 'EL', 'MS', 'TZ')[tome - 8])
         book.add_credits()
-        book.save(output_path + book.book.title.replace(':', '') + '.epub')
+        book.save(output_path + book.book.title.replace(':', ' -') + '.epub')
 
 
 def build_digest(wiki, output_path):
     """Create Monthly Digest ebook."""
-    date = arrow.now().replace(months=-1)
+    date = arrow.now().replace(months=-5)
     short_date = date.format('YYYY-MM')
     long_date = date.format('MMMM YYYY')
     book = Book(
-        wiki, wiki.list_pages(rating='>0', created=short_date), 'complete.png',
+        wiki, wiki.list_pages(rating='>0', created=short_date),
+        'scp_cover_3.png',
         title='SCP Foundation Monthly Digest: ' + long_date)
     book.add_intro()
     book.add_skips(misc=True)
     # hubs are intentionally not included
     book.add_tales()
     book.add_credits()
-    book.save(output_path + book.book.title.replace(':', '') + '.epub')
+    book.save(output_path + book.book.title.replace(':', ' -') + '.epub')
