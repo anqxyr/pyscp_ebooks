@@ -24,7 +24,10 @@ class Parser:
     This is a class to allow inheritance by individual epub-builders.
     """
 
-    def parse(self, page, pages):
+    def __init__(self, pages):
+        self.pages = pages
+
+    def parse(self, page):
         soup = bs(page.html).find(id='page-content')
         for elem in soup(class_='page-rate-widget-box'):
             elem.decompose()
@@ -39,14 +42,13 @@ class Parser:
         for elem in soup('blockquote'):
             self._quote(elem)
         for elem in soup('a'):
-            self._link(elem, page._wiki.site, pages)
+            self._link(elem, page._wiki.site)
         for elem in soup('img'):
             self._image(elem)
         self._title(soup, page)
         return str(soup)
 
-    @staticmethod
-    def _tab(elem):
+    def _tab(self, elem):
         """Parse wikidot tab block."""
         elem.attrs = {'class': 'tabview'}
         titles = elem.find(class_='yui-nav')('em')
@@ -59,8 +61,7 @@ class Parser:
             new_title.string = title.text
             tab.insert(0, new_title)
 
-    @staticmethod
-    def _collapsible(elem):
+    def _collapsible(self, elem):
         """Parse collapsible block."""
         elem.attrs = {'class': 'collapsible'}
         title = bs().new_tag('p', **{'class': 'collapsible-title'})
@@ -71,43 +72,37 @@ class Parser:
         for child in list(body.contents):
             elem.append(child)
 
-    @staticmethod
-    def _footnote(elem):
+    def _footnote(self, elem):
         """Parse a footnote."""
         elem.string = elem.a.string
 
-    @staticmethod
-    def _footnote_footer(elem):
+    def _footnote_footer(self, elem):
         """Parse footnote footer."""
         elem.attrs = {'class': 'footnote'}
         elem.string = ''.join(elem.stripped_strings)
 
-    @staticmethod
-    def _link(elem, site, pages):
+    def _link(self, elem, site):
         """Parse a link; remap if links to a page, otherwise remove."""
         if 'href' not in elem.attrs:
             return
         link = elem['href']
         if not link.startswith(site):
             link = site + link
-        if link not in pages:
+        if link not in self.pages:
             elem.name = 'span'
             elem.attrs = {'class': 'link'}
         else:
-            elem['href'] = pages[link] + '.xhtml'
+            elem['href'] = self.pages[link] + '.xhtml'
 
-    @staticmethod
-    def _quote(elem):
+    def _quote(self, elem):
         """Parse a block quote."""
         elem.name = 'div'
         elem.attrs = {'class': 'quote'}
 
-    @staticmethod
-    def _image(elem):
+    def _image(self, elem):
         elem.decompose()
 
-    @staticmethod
-    def _title(soup, page):
+    def _title(self, soup, page):
         title = bs().new_tag('p', **{'class': 'title'})
         title.string = page.title
         soup.insert(0, title)

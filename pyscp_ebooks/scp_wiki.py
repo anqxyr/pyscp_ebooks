@@ -148,7 +148,7 @@ class Book(builder.Book):
             'resources/scp_wiki/{}.xhtml'.format(x)).decode('UTF-8')
         self.add_page('Cover Page', page('cover'))
         self.add_page('Introduction', page('intro'))
-        license = page('license')
+        license = parser.bs(page('license'))
         license.find(class_='footer').string = arrow.now().format('YYYY-MM-DD')
         self.add_page('License', license.div.prettify())
         self.add_page('Title Page', page('title'))
@@ -188,6 +188,9 @@ class Book(builder.Book):
     def add_tales(self, start='0', end='Z'):
         section = self.new_section('Assorted Tales')
         tales = self._tags('tale') - self._tags('hub', 'goi2014')
+        tales = [
+            i for i in tales
+            if start.lower() <= i.split('/')[-1][0] <= end.lower()]
         # I could have used the first letter of the title instead
         # but that sometimes gives weird stuff like punctuation or
         # non-english symbols
@@ -240,7 +243,7 @@ def build_tomes(wiki, output_path):
 
 def build_digest(wiki, output_path):
     """Create Monthly Digest ebook."""
-    date = arrow.now().replace(months=-5)
+    date = arrow.now().replace(months=-1)
     short_date = date.format('YYYY-MM')
     long_date = date.format('MMMM YYYY')
     book = Book(

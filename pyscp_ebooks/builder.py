@@ -67,14 +67,18 @@ class Book:
         for i in parent.children:
             self._replace_placeholders(i)
 
+    def _get_content(self, page):
+        if not hasattr(self, '_parser'):
+            self._parser = parser.Parser(self.urls)
+        return self._parser.parse(page)
+
     def _overwrite(self, item):
         """Overwrite the placeholder page with parsed data."""
         if item.title not in self.urls:
             return item
         self.pb.update()
         page = self.wiki(item.title)
-        content = parser.parse(page, self.urls)
-        self.book._write_page(item.uid, page.title, content)
+        self.book._write_page(item.uid, page.title, self._get_content(page))
         return item._replace(title=page.title)
 
     def _add_section_header(self, title, parent=None):
