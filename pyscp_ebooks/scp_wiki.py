@@ -84,32 +84,26 @@ class Book(builder.Book):
     def _get_children(self, url):
         # edge-cases first
         edge_cases = {
-            'http://www.scp-wiki.net/scp-076': [
-                'http://www.scp-wiki.net/scp-076-2'],
-            'http://www.scp-wiki.net/scp-2998': [
-                'http://www.scp-wiki.net/scp-2998-{}'.format(i)
-                for i in range(2, 11)]}
-        if url in edge_cases:
-            return edge_cases[url]
-
+            'scp-076': ['scp-076-2'],
+            'scp-2998': ['scp-2998-{}'.format(i) for i in range(2, 11)]}
+        if ('http://www.scp-wiki.net/' + url) in edge_cases:
+            return [('http://www.scp-wiki.net/' + i) for i in edge_cases[url]]
         # now the rest
-        if url in self._tags('scp', 'splash'):
+        if url in self._tags('scp splash'):
             return self._children_skip(url)
-        elif url in (
-                self._tags('hub') & self._tags('tale', 'goi2014') -
-                self._tags('_sys')):
+        elif url in self._tags('+hub tale goi2014 -_sys'):
             return self._children_hub(url)
         else:
             return []
 
     def _children_skip(self, url):
         return [u for u in self.wiki(url).links
-                if u in self._tags('supplement', 'splash')]
+                if u in self._tags('supplement splash')]
 
     def _children_hub(self, url):
         candidates = [
             i for i in self.wiki(url).links if i in
-            (self._tags('tale', 'goi-format', 'goi2014') - self._tags('hub'))]
+            self._tags('tale goi-format goi2014 -hub')]
         confirmed = [
             i for i in candidates
             if url in self.wiki(i).links or url == self.wiki(i).parent]
@@ -134,11 +128,16 @@ class Book(builder.Book):
     ###########################################################################
 
     @functools.lru_cache()
-    def _tags(self, *tags):
+    def _tags(self, tags):
         """Return a set of urls with matching tags."""
+        tags = tags.split()
         result = set()
-        for tag in tags:
-            result |= {p.url for p in self.wiki.list_pages(tag=tag)}
+        for t in [t for t in tags if t[0] not in '+-']:
+            result |= {p.url for p in self.wiki.list_pages(tag=t)}
+        for t in [t for t in tags if t[0] == '+']:
+            result &= {p.url for p in self.wiki.list_pages(tag=t[1:])}
+        for t in [t for t in tags if t[0] == '-']:
+            result -= {p.url for p in self.wiki.list_pages(tag=t[1:])}
         return result
 
     def add_intro(self):
@@ -180,14 +179,14 @@ class Book(builder.Book):
 
     def add_hubs(self, start='0', end='Z'):
         section = self.new_section('Canons and Series')
-        for i in sorted(self._tags('hub') - self._tags('_sys')):
+        for i in sorted(self._tags('hub -_sys')):
             if (start.lower() <= i.split('/')[-1][0] <= end.lower()
                     and self._get_children(i)):
                 self.add_url(i, section)
 
     def add_tales(self, start='0', end='Z'):
         section = self.new_section('Assorted Tales')
-        tales = self._tags('tale') - self._tags('hub', 'goi2014')
+        tales = self._tags('tale -hub -goi2014')
         tales = [
             i for i in tales
             if start.lower() <= i.split('/')[-1][0] <= end.lower()]
