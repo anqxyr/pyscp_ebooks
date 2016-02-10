@@ -186,7 +186,7 @@ class Book(builder.Book):
 
     def add_tales(self, start='0', end='Z'):
         section = self.new_section('Assorted Tales')
-        tales = self._tags('tale -hub -goi2014')
+        tales = self._tags('tale -hub goi2014')
         tales = [
             i for i in tales
             if start.lower() <= i.split('/')[-1][0] <= end.lower()]

@@ -19,6 +19,7 @@ class PBar:
         self.started = arrow.now()
         self.width = 40
         os.system('setterm -cursor off')
+        print(self._line() + '\r', end='')
 
     def update(self):
         self.value += 1
